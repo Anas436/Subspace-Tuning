@@ -19,6 +19,7 @@ The Trainer class, to easily train a 🤗 Transformers from scratch or finetune 
 import collections
 import gc
 import inspect
+import json
 import math
 import os
 import random
@@ -30,6 +31,7 @@ import warnings
 from logging import StreamHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from budget_controller import BudgetController
 
 
 # Integrations must be imported before ML frameworks:
@@ -1188,6 +1190,28 @@ class Trainer:
                                 self.lr_scheduler.step()
 
                     model.zero_grad()
+                    if self.state.global_step == 100:
+                        budget_controller = BudgetController()
+                        new_parameters = budget_controller.allocate_and_initialize(
+                            self.model,
+                            total_budget=192,
+                        )
+                        
+                        if new_parameters:
+                            self.optimizer.add_param_group({'params': new_parameters})
+
+                            if self.lr_scheduler is not None and hasattr(self.lr_scheduler, "base_lrs"):
+                                base_lrs = list(self.lr_scheduler.base_lrs)
+                                base_lrs.append(base_lrs[0])
+                                self.lr_scheduler.base_lrs = base_lrs
+                                if hasattr(self.lr_scheduler, "lr_lambdas") and self.lr_scheduler.lr_lambdas:
+                                    lr_lambdas = list(self.lr_scheduler.lr_lambdas)
+                                    lr_lambdas.append(lr_lambdas[0])
+                                    self.lr_scheduler.lr_lambdas = lr_lambdas
+                        print(
+                            'LayerTSD allocation:',
+                            json.dumps(budget_controller.last_allocations, sort_keys=True),
+                        )
                     self.state.global_step += 1
                     self.state.epoch = epoch + (step + 1) / steps_in_epoch
                     self.control = self.callback_handler.on_step_end(self.args, self.state, self.control)
