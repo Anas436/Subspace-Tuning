@@ -1212,6 +1212,12 @@ class Trainer:
                             'LayerTSD allocation:',
                             json.dumps(budget_controller.last_allocations, sort_keys=True),
                         )
+                        task_name = str(getattr(self.model.config, "finetuning_task", "unknown"))
+                        model_type = "large" if int(getattr(self.model.config, "num_hidden_layers", 12)) >= 24 else "base"
+                        results_dir = os.path.join(os.getcwd(), "results")
+                        os.makedirs(results_dir, exist_ok=True)
+                        with open(os.path.join(results_dir, "allocations_{}_{}.json".format(model_type, task_name)), "w") as f:
+                            json.dump(budget_controller.last_allocations, f, sort_keys=True)
                     self.state.global_step += 1
                     self.state.epoch = epoch + (step + 1) / steps_in_epoch
                     self.control = self.callback_handler.on_step_end(self.args, self.state, self.control)
